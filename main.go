@@ -12,7 +12,30 @@ import (
 
 var (
 	port = flag.Int("p", 5000, "port number.")
+	bot  *linebot.Client
 )
+
+func getUserProfile(e *linebot.Event) {
+	switch e.Source.Type {
+	case linebot.EventSourceTypeUser:
+		log.Println("from user:" + e.Source.UserID)
+		userProfile, err := bot.GetProfile(e.Source.UserID).Do()
+		if err != nil {
+			log.Println("Get user profile fail:", err)
+		} else {
+			log.Println("Get user profile success!!")
+			log.Println("UserID:" + userProfile.UserID)
+			log.Println("DisplayName:" + userProfile.DisplayName)
+			log.Println("PictureURL:" + userProfile.PictureURL)
+			log.Println("StatusMessage:" + userProfile.StatusMessage)
+			log.Println("Language:" + userProfile.Language)
+		}
+	case linebot.EventSourceTypeGroup:
+		log.Println("from group:" + e.Source.GroupID)
+	case linebot.EventSourceTypeRoom:
+		log.Println("from room:" + e.Source.RoomID)
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -30,7 +53,7 @@ func main() {
 	channelAccessToken := v.GetString("linebot.channel_access_token")
 
 	// create a linebot
-	bot, err := linebot.New(channelSecret, channelAccessToken)
+	bot, err = linebot.New(channelSecret, channelAccessToken)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,6 +71,9 @@ func main() {
 		}
 		for _, event := range events {
 			if event.Type == linebot.EventTypeMessage {
+
+				getUserProfile(event)
+
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
 					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(message.Text)).Do(); err != nil {
