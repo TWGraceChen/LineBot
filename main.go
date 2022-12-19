@@ -1,12 +1,13 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"flag"
-	"github.com/spf13/viper"
+
 	"github.com/line/line-bot-sdk-go/v7/linebot"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -19,18 +20,17 @@ func main() {
 	// read config file
 	v := viper.New()
 	v.SetConfigName("config")
-    v.SetConfigType("yaml")
+	v.SetConfigType("yaml")
 	v.AddConfigPath(".")
 	err := v.ReadInConfig()
-    if err != nil {
-        log.Fatal("[Error] Loading config failed: ", err)
-    }
+	if err != nil {
+		log.Fatal("[Error] Loading config failed: ", err)
+	}
 	channelSecret := v.GetString("linebot.channel_secret")
 	channelAccessToken := v.GetString("linebot.channel_access_token")
-	
 
 	// create a linebot
-	bot, err := linebot.New(channelSecret,channelAccessToken,)
+	bot, err := linebot.New(channelSecret, channelAccessToken)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -65,8 +65,8 @@ func main() {
 	})
 	// This is just sample code.
 	// For actual use, you must support HTTPS by using `ListenAndServeTLS`, a reverse proxy or something else.
-	url := fmt.Sprintf(":%v",*port)
-	log.Println("listing:"+url)
+	url := fmt.Sprintf(":%v", *port)
+	log.Println("listing:" + url)
 	if err := http.ListenAndServe(url, nil); err != nil {
 		log.Fatal(err)
 	}
