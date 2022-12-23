@@ -86,8 +86,37 @@ func main() {
 						reply = linebot.NewAudioMessage("https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_700KB.mp3", 10)
 					case "6":
 						reply = linebot.NewLocationMessage("My location", "台北市中正區忠孝東路一段9號4樓", 25.0450205, 121.5214747)
+					case "7":
+						reply = linebot.NewImagemapMessage("https://thumbs.dreamstime.com/b/seascape-over-under-sea-cloudy-sky-rocky-seabed-seascape-over-under-sea-surface-cloudy-blue-sky-rocky-seabed-underwater-108661258.jpg",
+							"this is alt infomation of imagemap.",
+							linebot.ImagemapBaseSize{Width: 1040, Height: 1040},
+							linebot.NewURIImagemapAction("Left up label", "https://www.facebook.com/", linebot.ImagemapArea{X: 0, Y: 0, Width: 520, Height: 520}),
+							linebot.NewURIImagemapAction("Right up label", "https://www.google.com/", linebot.ImagemapArea{X: 520, Y: 0, Width: 520, Height: 520}),
+							linebot.NewMessageImagemapAction("left down label", "tap left.", linebot.ImagemapArea{X: 0, Y: 520, Width: 520, Height: 520}),
+							linebot.NewMessageImagemapAction("right down label", "tap right.", linebot.ImagemapArea{X: 520, Y: 520, Width: 520, Height: 520}))
+
+					case "8":
+						reply = linebot.NewTemplateMessage("Buttons Template.",
+							linebot.NewButtonsTemplate("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg", "Title", "this is text field",
+								linebot.NewURIAction("URI Action", "https://www.google.com/"),
+								linebot.NewMessageAction("Message Action", "This is a message action.")))
+					case "9":
+						reply = linebot.NewTemplateMessage("Confirm Template.",
+							linebot.NewConfirmTemplate("Confirm Template",
+								linebot.NewURIAction("left", "https://www.google.com/"),
+								linebot.NewMessageAction("right", "This is a message action.")))
+
+					case "10":
+						reply = linebot.NewTemplateMessage("Carousel Template.",
+							linebot.NewCarouselTemplate(
+								linebot.NewCarouselColumn("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg", "Title", "this is text field",
+									linebot.NewURIAction("URI Action", "https://www.google.com/"),
+									linebot.NewMessageAction("Message Action", "This is a message action.")),
+								linebot.NewCarouselColumn("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg", "Title", "this is text field",
+									linebot.NewURIAction("URI Action", "https://www.google.com/"),
+									linebot.NewMessageAction("Message Action", "This is a message action."))))
 					default:
-						reply = linebot.NewTextMessage("1:Text\n2:Sticker\n3:Image\n4:Video\n5:Audio\n6:Location")
+						reply = linebot.NewTextMessage("1:Text\n2:Sticker\n3:Image\n4:Video\n5:Audio\n6:Location\n7:Imagemap\n8:Buttun Template\n9:Confirm Tempplate\n10:Carousel Template")
 					}
 
 					if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
