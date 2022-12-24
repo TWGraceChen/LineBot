@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/line/line-bot-sdk-go/v7/linebot"
 	"github.com/spf13/viper"
@@ -75,7 +80,7 @@ func main() {
 					var reply linebot.SendingMessage
 					switch message.Text {
 					case "1":
-						reply = linebot.NewTextMessage("text message")
+						reply = linebot.NewTextMessage("text message $").AddEmoji(linebot.NewEmoji(13, "5ac21e6c040ab15980c9b444", "001"))
 					case "2":
 						reply = linebot.NewStickerMessage("446", "1988")
 					case "3":
@@ -115,8 +120,16 @@ func main() {
 								linebot.NewCarouselColumn("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg", "Title", "this is text field",
 									linebot.NewURIAction("URI Action", "https://www.google.com/"),
 									linebot.NewMessageAction("Message Action", "This is a message action."))))
+
+					case "11":
+						reply = linebot.NewTemplateMessage("Image carousel Template.",
+							linebot.NewImageCarouselTemplate(
+								linebot.NewImageCarouselColumn("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg",
+									linebot.NewURIAction("URI Action", "https://www.google.com/")),
+								linebot.NewImageCarouselColumn("https://www.tastingtable.com/img/gallery/coffee-brands-ranked-from-worst-to-best/l-intro-1645231221.jpg",
+									linebot.NewURIAction("URI Action", "https://www.google.com/"))))
 					default:
-						reply = linebot.NewTextMessage("1:Text\n2:Sticker\n3:Image\n4:Video\n5:Audio\n6:Location\n7:Imagemap\n8:Buttun Template\n9:Confirm Tempplate\n10:Carousel Template")
+						reply = linebot.NewTextMessage("1:Text\n2:Sticker\n3:Image\n4:Video\n5:Audio\n6:Location\n7:Imagemap\n8:Buttun Template\n9:Confirm Tempplate\n10:Carousel Template\n11:Image carousel Template")
 					}
 
 					if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
@@ -129,7 +142,31 @@ func main() {
 						log.Print(err)
 					}
 				case *linebot.ImageMessage:
-					replyMessage := fmt.Sprintf("image ID is %s", message.ID)
+					content, err := bot.GetMessageContent(message.ID).Do()
+					if err != nil {
+						log.Print(err)
+					}
+					b, err := io.ReadAll(content.Content)
+					if err != nil {
+						log.Print(err)
+					} else {
+						img, _, err := image.Decode(bytes.NewReader(b))
+						if err != nil {
+							log.Fatalln(err)
+						}
+
+						out, _ := os.Create("./" + message.ID + ".jpeg")
+						defer out.Close()
+
+						var opts jpeg.Options
+						opts.Quality = 100
+
+						err = jpeg.Encode(out, img, &opts)
+						if err != nil {
+							log.Println(err)
+						}
+					}
+					replyMessage := fmt.Sprintf("image ID is %s, length is %v,type is %v", message.ID, content.ContentLength, content.ContentType)
 					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
 						log.Print(err)
 					}

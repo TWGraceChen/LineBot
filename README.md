@@ -18,7 +18,10 @@ https://developers.line.biz/en/
 ## TO DO
 - 把token和secret拉到外部config [OK]
 - port用flag來指定 [OK]
-- push各種type的message
+- reply各種type的message[OK]
+- get各種type的message
+- push message
+- event type
 - logging
 - 把data存到db
 - 啟動python的gRPC server，讓go可以使用python的function。
