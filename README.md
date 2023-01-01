@@ -19,7 +19,7 @@ https://developers.line.biz/en/
 - 把token和secret拉到外部config [OK]
 - port用flag來指定 [OK]
 - reply各種type的message[OK]
-- get各種type的message
+- get各種type的message[OK]
 - push message
 - event type
 - logging

@@ -170,6 +170,50 @@ func main() {
 					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
 						log.Print(err)
 					}
+				case *linebot.AudioMessage:
+					content, err := bot.GetMessageContent(message.ID).Do()
+					if err != nil {
+						log.Print(err)
+					}
+
+					// TODO: save audio file
+
+					replyMessage := fmt.Sprintf("audio ID is %s, length is %v,type is %v", message.ID, content.ContentLength, content.ContentType)
+					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+						log.Print(err)
+					}
+
+				case *linebot.VideoMessage:
+					content, err := bot.GetMessageContent(message.ID).Do()
+					if err != nil {
+						log.Print(err)
+					}
+
+					// TODO: save video file
+
+					replyMessage := fmt.Sprintf("video ID is %s, dur is %v, length is %v,type is %v", message.ID, message.Duration, content.ContentLength, content.ContentType)
+					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+						log.Print(err)
+					}
+
+				case *linebot.FileMessage:
+					content, err := bot.GetMessageContent(message.ID).Do()
+					if err != nil {
+						log.Print(err)
+					}
+
+					// TODO: save file
+
+					replyMessage := fmt.Sprintf("file ID is %s, filename is %v, length is %v,type is %v", message.ID, message.FileName, content.ContentLength, content.ContentType)
+					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+						log.Print(err)
+					}
+				case *linebot.LocationMessage:
+					replyMessage := fmt.Sprintf("title is %s, address is %s, lat is %v, lon is %v", message.Title, message.Address, message.Latitude, message.Longitude)
+					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+						log.Print(err)
+					}
+
 				}
 			}
 		}
