@@ -15,14 +15,16 @@ https://developers.line.biz/en/
 5. 回到Line Developers填入webhook URL
 6. 完成
 
-## TO DO
-- 把token和secret拉到外部config [OK]
-- port用flag來指定 [OK]
-- reply各種type的message[OK]
-- get各種type的message[OK]
-- push message
-- event type
-- logging
-- 把data存到db
-- 啟動python的gRPC server，讓go可以使用python的function。
-- dockerize
+## gRPC
+### python
+- Install: `python3 -m pip install grpcio`
+- install gRPC tools: `python3 -m pip install grpcio-tools`
+- Generate gRPC code: `python3 -m grpc_tools.protoc -I ./ --python_out=./service --pyi_out=./service --grpc_python_out=./service service.proto`
+- start server: `python3 server.py`
+
+
+### golang
+- `go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28`
+- `go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2`
+- `export PATH="$PATH:$(go env GOPATH)/bin"`
+- Generate gRPC code : `protoc --go_out=./service_client --go_opt=paths=source_relative --go-grpc_out=./service_client --go-grpc_opt=paths=source_relative service.proto`

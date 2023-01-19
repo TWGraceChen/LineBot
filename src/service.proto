@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+//import "google/protobuf/empty.proto";
+
+option go_package = "./linebot";
+
+service MyService {
+  rpc SearchLyric (searchinfo) returns (songinfo){}
+}
+
+
+message searchinfo {
+  string name= 1;
+}
+
+message songinfo {
+  string lyric = 1;
+}
+
