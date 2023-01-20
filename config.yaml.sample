@@ -1,5 +1,6 @@
 service:
   port: 5000
+  grpc: 50051
   
 linebot:
   channel_secret : <channel secret>

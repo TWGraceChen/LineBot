@@ -8,6 +8,7 @@ import (
 	pb "linebot/service_client"
 	"log"
 	"net/http"
+	"os/exec"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -18,6 +19,7 @@ import (
 
 type config struct {
 	servicePort        int
+	serviceGrpc        int
 	channelSecret      string
 	channelAccessToken string
 	dbHost             string
@@ -28,9 +30,14 @@ type config struct {
 }
 
 var (
-	c   config
-	bot *linebot.Client
-	gc  *grpc.ClientConn
+	c     config
+	bot   *linebot.Client
+	gc    *grpc.ClientConn
+	pycmd *exec.Cmd
+)
+
+var (
+	sigchan chan bool
 )
 
 func getUserProfile(e *linebot.Event) (userid, displayname string) {
@@ -125,6 +132,7 @@ func readConfig() (c config, err error) {
 
 	}
 	c.servicePort = v.GetInt("service.port")
+	c.serviceGrpc = v.GetInt("service.grpc")
 	c.channelSecret = v.GetString("linebot.channel_secret")
 	c.channelAccessToken = v.GetString("linebot.channel_access_token")
 	c.dbHost = v.GetString("db.host")
@@ -169,14 +177,39 @@ func initdb() (err error) {
 	return nil
 }
 
-func initGrpcClient() (conn *grpc.ClientConn, err error) {
-	addr := "localhost:50051"
-	conn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5*time.Second))
+func closeGrpc() {
+	gc.Close()      // clost grpc connection
+	sigchan <- true // deliver signal to kill python grpc server
+}
+
+func initGrpc() (err error) {
+	// start python grpc server
+	pycmd = exec.Command("python3", "src/service/server.py", fmt.Sprintf("%v", c.serviceGrpc))
+	err = pycmd.Start()
 	if err != nil {
-		return conn, err
+		return err
 	}
 
-	return conn, nil
+	// waiting for kill python grpc server process
+	sigchan = make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-sigchan:
+				pycmd.Process.Kill()
+			}
+		}
+
+	}()
+
+	// establish connection to python grpc server
+	addr := fmt.Sprintf("localhost:%v", c.serviceGrpc)
+	gc, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5*time.Second))
+	if err != nil {
+		return err
+	}
+	log.Println("Init gRPC Success.")
+	return nil
 }
 
 func main() {
@@ -195,11 +228,11 @@ func main() {
 	}
 
 	// grpc connection
-	gc, err = initGrpcClient()
+	err = initGrpc()
 	if err != nil {
 		log.Fatal("[Error] Init gRPC connection failed:", err)
 	}
-	defer gc.Close()
+	defer closeGrpc()
 
 	// create a linebot
 	bot, err = linebot.New(c.channelSecret, c.channelAccessToken)
