@@ -20,6 +20,7 @@ import (
 type config struct {
 	servicePort        int
 	serviceGrpc        int
+	servicePath        string
 	channelSecret      string
 	channelAccessToken string
 	dbHost             string
@@ -29,15 +30,22 @@ type config struct {
 	dbDbname           string
 }
 
-var (
-	c     config
-	bot   *linebot.Client
-	gc    *grpc.ClientConn
-	pycmd *exec.Cmd
+type userMode string
+
+const (
+	UserModeDefault  userMode = "尚未選擇任何功能"
+	UserModeSong     userMode = "切換至歌曲管理功能"
+	UserModeList     userMode = "切換至歌單管理功能"
+	UserModeTemplate userMode = "切換至模板管理功能"
 )
 
 var (
+	c       config
+	bot     *linebot.Client
+	gc      *grpc.ClientConn
+	pycmd   *exec.Cmd
 	sigchan chan bool
+	users   map[string]userMode
 )
 
 func getUserProfile(e *linebot.Event) (userid, displayname string) {
@@ -71,7 +79,67 @@ func searchLyric(songname string) (lyric string) {
 	return r.GetLyric()
 }
 
-func processMessage(userid, replytoken string, m linebot.Message) {
+func templateModeMessage(userid string) (reply linebot.SendingMessage) {
+	reply = linebot.NewTextMessage("已切換至模板模式，上傳一個pptx檔案即可建立模板。")
+	if db, err := connect(); err != nil {
+		log.Println(err)
+	} else {
+		defer db.Close()
+		sqlstat := fmt.Sprintf("select original_name,updatetime from template where userid = '%v' order by updatetime desc", userid)
+		if rows, err := db.Query(sqlstat); err != nil {
+			log.Println("query template info error:", err)
+		} else {
+			var actions []linebot.TemplateAction
+			for rows.Next() {
+				var original_name, updatetime string
+				err = rows.Scan(&original_name, &updatetime)
+				if err != nil {
+					log.Println("scan rows error:", err)
+				} else {
+					actions = append(actions, linebot.NewMessageAction(original_name, fmt.Sprintf("模板:%v,建立於:%v", original_name, updatetime)))
+				}
+
+			}
+			if len(actions) > 0 {
+				reply = linebot.NewTemplateMessage("已切換至模板模式",
+					linebot.NewButtonsTemplate("", "模板模式", "上傳一個pptx檔案即可建立模板，以下是已經建立的模板，可以點選後選擇下載或刪除。", actions...))
+			}
+		}
+	}
+	return
+}
+
+func templateModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+	reply = templateModeMessage(userid)
+	switch message := m.(type) {
+	case *linebot.FileMessage:
+		//content, err := linebot.GetMessageContent(message.ID).DO
+
+		reply = linebot.NewTextMessage("模板已上傳，模板:" + message.FileName)
+	}
+	return
+}
+
+func songModeMessage(userid string) (reply linebot.SendingMessage) {
+	reply = linebot.NewTextMessage("已切換至歌曲模式")
+	return
+}
+
+func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+	//lyric := searchLyric(message.Text)
+	//reply = linebot.NewTextMessage(lyric)
+	return
+}
+
+func listModeMessage(userid string) (reply linebot.SendingMessage) {
+	reply = linebot.NewTextMessage("已切換至歌單模式，請用以下的格式輸入歌單：模板：<模板名稱>\n<詩歌1名稱>\n<詩歌2名稱>\n<詩歌3名稱>\n經文:<經文出處>")
+	return
+}
+func listModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+	return
+}
+
+func processMessage(userid, replytoken string, m linebot.Message) (reply linebot.SendingMessage) {
 	if db, err := connect(); err != nil {
 		log.Println(err)
 	} else {
@@ -81,19 +149,44 @@ func processMessage(userid, replytoken string, m linebot.Message) {
 			log.Println("save user profile fail:", err)
 		}
 	}
-	var reply linebot.SendingMessage
+
+	// prepare default message
+	reply = linebot.NewImagemapMessage("https://github.com/TWGraceChen/LineBot/blob/main/src/img/modeimg.jpg?raw=true",
+		"請輸入要切換的模式",
+		linebot.ImagemapBaseSize{Width: 1040, Height: 1040},
+		linebot.NewMessageImagemapAction("歌曲管理", string(UserModeSong), linebot.ImagemapArea{X: 0, Y: 0, Width: 1040, Height: 520}),
+		linebot.NewMessageImagemapAction("歌單管理", string(UserModeList), linebot.ImagemapArea{X: 0, Y: 520, Width: 520, Height: 520}),
+		linebot.NewMessageImagemapAction("模板管理", string(UserModeTemplate), linebot.ImagemapArea{X: 520, Y: 520, Width: 520, Height: 520}))
+
+	// check message is switch message
 	switch message := m.(type) {
 	case *linebot.TextMessage:
-		lyric := searchLyric(message.Text)
-		reply = linebot.NewTextMessage(lyric)
-	default:
-		log.Println("message type:", m.Type())
-		reply = linebot.NewTextMessage("請輸入文字")
+		switch message.Text {
+		case string(UserModeList): // switch to List mode
+			users[userid] = UserModeList
+			reply = listModeMessage(userid)
+			return
+		case string(UserModeSong): // switch to Song mode
+			users[userid] = UserModeSong
+			reply = songModeMessage(userid)
+			return
+		case string(UserModeTemplate): // switch to Template mode
+			users[userid] = UserModeTemplate
+			reply = templateModeMessage(userid)
+			return
+		}
 	}
 
-	if _, err := bot.ReplyMessage(replytoken, reply).Do(); err != nil {
-		log.Print(err)
+	switch users[userid] {
+	case UserModeTemplate:
+		reply = templateModeAction(userid, m)
+	case UserModeList:
+		reply = listModeAction(userid, m)
+	case UserModeSong:
+		reply = songModeAction(userid, m)
 	}
+	return
+
 }
 
 func processEvent(events []*linebot.Event) {
@@ -104,16 +197,24 @@ func processEvent(events []*linebot.Event) {
 			log.Println(err)
 		} else {
 			defer db.Close()
-			insertStat := fmt.Sprintf("insert into lineuser values ('%s','%s',now())", userid, displayname)
+			insertStat := fmt.Sprintf("insert into lineuser values ('%s','%s',now()) on conflict (userid) do nothing;", userid, displayname)
 			if _, err := db.Exec(insertStat); err != nil {
 				log.Println("save user profile fail:", err)
 			}
 		}
 
+		// check user in users map
+		if _, ok := users[userid]; !ok {
+			users[userid] = UserModeDefault
+		}
+
 		// switch type of event(message,follow,join...)
 		switch event.Type {
 		case linebot.EventTypeMessage:
-			processMessage(userid, event.ReplyToken, event.Message)
+			reply := processMessage(userid, event.ReplyToken, event.Message)
+			if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+				log.Print(err)
+			}
 		default:
 			log.Println("event:", event.Type)
 		}
@@ -133,6 +234,7 @@ func readConfig() (c config, err error) {
 	}
 	c.servicePort = v.GetInt("service.port")
 	c.serviceGrpc = v.GetInt("service.grpc")
+	c.servicePath = v.GetString("service.path")
 	c.channelSecret = v.GetString("linebot.channel_secret")
 	c.channelAccessToken = v.GetString("linebot.channel_access_token")
 	c.dbHost = v.GetString("db.host")
@@ -164,6 +266,11 @@ func initdb() (err error) {
 	}
 
 	sqlstat = `create table if not exists linelog (userid varchar(64),messagetype varchar(64),replytoken varchar(64),receicetime timestamp)`
+	if _, err := db.Exec(sqlstat); err != nil {
+		return err
+	}
+
+	sqlstat = `create table if not exists template (userid varchar(64),original_name varchar(64),name varchar(64),updatetime timestamp)`
 	if _, err := db.Exec(sqlstat); err != nil {
 		return err
 	}
@@ -226,6 +333,9 @@ func main() {
 	if err = initdb(); err != nil {
 		log.Fatal("[Error] Init Database failed:", err)
 	}
+
+	// init users mode map
+	users = make(map[string]userMode)
 
 	// grpc connection
 	err = initGrpc()
