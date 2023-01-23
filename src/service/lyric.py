@@ -35,5 +35,5 @@ def searchLyric(name):
     return lyric
 
 if __name__ == '__main__':
-    #print(searchLyric("我要歌頌你的力量"))
+    print(searchLyric("我要歌頌你的力量"))
     

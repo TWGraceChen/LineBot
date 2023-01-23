@@ -168,7 +168,7 @@ func initdb() (err error) {
 		return err
 	}
 
-	sqlstat = `create table if not exists lyrics (name varchar(64),content text,updatetime timestamp)`
+	sqlstat = `create table if not exists lyrics (id bigint,name varchar(64),displayname varchar(64),content text,updatetime timestamp)`
 	if _, err := db.Exec(sqlstat); err != nil {
 		return err
 	}
