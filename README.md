@@ -31,7 +31,7 @@ https://developers.line.biz/en/
 3. 安裝server環境：`./install.sh`(未完成)  
 4. 編譯程式碼：`./build.sh`  
 5. 複製config.yaml.sample: `cp config.yaml.sample config.yaml`
-6. [編輯config.yaml](#編輯config.yaml)
+6. [編輯config.yaml](#編輯configyaml)
 7. 啟動db: `docker-compose up -d`
 8. 啟動service：`./linebot`
 9. 使用ngrok將local的port forword出去(如果允許最好用更安全的方法)  
