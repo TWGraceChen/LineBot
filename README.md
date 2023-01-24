@@ -1,5 +1,26 @@
 # LineBot
 
+## Information Flow
+```mermaid
+flowchart 
+    subgraph Infomation_Flow
+    direction LR
+    START{{start}} --> U
+    U((user)) -- 發送訊息 --> L["Line<br/>Platform"]
+    L -- 傳遞訊息 --> G["LineBot<br/>service<br/>(Golang)"]
+    G -- 發送訊息 --> L
+    L -- 傳遞訊息 --> U
+        subgraph Server
+            G["LineBot<br/>service<br/>(Golang)"] -- gRPC --> P["Customized<br/>Service<br/>(Python)"]
+            G --> D[("DB<br/>(Postgres)")] 
+        end
+    end
+    classDef bg fill:#fff,stroke-width:0px;
+    class Infomation_Flow bg
+
+```
+
+
 ## 建立與佈署Line Bot
 1. 在Line Developers建立Provider和Channel
 https://developers.line.biz/en/
