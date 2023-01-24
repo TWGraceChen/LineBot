@@ -2,3 +2,4 @@ config.yaml
 src/service/__pycache__/*
 dict
 migration
+data

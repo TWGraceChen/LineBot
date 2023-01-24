@@ -5,10 +5,14 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	pb "linebot/service_client"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -85,18 +89,19 @@ func templateModeMessage(userid string) (reply linebot.SendingMessage) {
 		log.Println(err)
 	} else {
 		defer db.Close()
-		sqlstat := fmt.Sprintf("select original_name,updatetime from template where userid = '%v' order by updatetime desc", userid)
+		sqlstat := fmt.Sprintf("select original_name,name,updatetime from template where userid = '%v' order by updatetime desc", userid)
 		if rows, err := db.Query(sqlstat); err != nil {
 			log.Println("query template info error:", err)
 		} else {
 			var actions []linebot.TemplateAction
 			for rows.Next() {
-				var original_name, updatetime string
-				err = rows.Scan(&original_name, &updatetime)
+				var original_name, name string
+				var updatetime time.Time
+				err = rows.Scan(&original_name, &name, &updatetime)
 				if err != nil {
 					log.Println("scan rows error:", err)
 				} else {
-					actions = append(actions, linebot.NewMessageAction(original_name, fmt.Sprintf("模板:%v,建立於:%v", original_name, updatetime)))
+					actions = append(actions, linebot.NewMessageAction(original_name, fmt.Sprintf("模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime.Format("2006-01-02 15:04:05"), name)))
 				}
 
 			}
@@ -113,9 +118,100 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 	reply = templateModeMessage(userid)
 	switch message := m.(type) {
 	case *linebot.FileMessage:
-		//content, err := linebot.GetMessageContent(message.ID).DO
+		content, err := bot.GetMessageContent(message.ID).Do()
+		if err != nil {
+			log.Println("get message content error:", err)
+		} else {
+			// check upload file is ppt file
+			if !strings.HasSuffix(message.FileName, ".pptx") {
+				reply = linebot.NewTextMessage("新增失敗，檔案非pptx檔。")
+				return
+			}
 
+			// save file
+			newname := fmt.Sprintf("%v.pptx", time.Now().Unix())
+			path := fmt.Sprintf("%v/template", c.servicePath)
+			name := fmt.Sprintf("%v/%v", path, newname)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				if err := os.MkdirAll(path, 0755); err != nil {
+					log.Println("create dir err:", err)
+					reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+					return
+				}
+			}
+			f, err := os.Create(name)
+			if err != nil {
+				log.Println("create file err:", err)
+				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				return
+			}
+			defer f.Close()
+			_, err = io.Copy(f, content.Content)
+			if err != nil {
+				log.Println("copy content to file err:", err)
+				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				return
+			}
+
+			// save record
+			if db, err := connect(); err != nil {
+				log.Println(err)
+				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				return
+			} else {
+				defer db.Close()
+				//create table if not exists template (userid varchar(64),original_name varchar(64),name varchar(64),updatetime timestamp)
+				insertStat := fmt.Sprintf("insert into template values ('%s','%s','%s',now())", userid, message.FileName, newname)
+				if _, err := db.Exec(insertStat); err != nil {
+					log.Println("save template log fail:", err)
+					reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+					return
+				}
+			}
+
+		}
 		reply = linebot.NewTextMessage("模板已上傳，模板:" + message.FileName)
+	case *linebot.TextMessage:
+		t := message.Text
+		r, _ := regexp.Compile("^(|下載|刪除)模板：(.*),建立於：(.*),系統檔案名稱：(.*)$")
+		match := r.FindStringSubmatch(t)
+		if len(match) == 0 {
+			reply = templateModeMessage(userid)
+			return
+		}
+		action := match[1]
+		original_name := match[2]
+		updatetime := match[3]
+		name := match[4]
+		if action == "" { // provide delete and download option
+			reply = linebot.NewTemplateMessage("刪除/下載模板",
+				linebot.NewConfirmTemplate(fmt.Sprintf("請選擇要刪除/下載模板：%v(建立於：%v)", original_name, updatetime),
+					linebot.NewMessageAction("刪除", fmt.Sprintf("刪除模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime, name)),
+					linebot.NewMessageAction("下載", fmt.Sprintf("下載模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime, name))))
+		} else if action == "下載" { // download template
+			reply = linebot.NewTextMessage("尚未開放下載功能")
+		} else if action == "刪除" { // delete template
+			// delete data
+			if db, err := connect(); err != nil {
+				log.Println(err)
+			} else {
+				defer db.Close()
+				sqlstat := fmt.Sprintf("delete from template where userid = '%v' and name = '%v'", userid, name)
+				if _, err := db.Exec(sqlstat); err != nil {
+					log.Println("delete template record error:", err)
+				}
+			}
+
+			// remove file
+			path := fmt.Sprintf("%v/template/%v", c.servicePath, name)
+			if err := os.Remove(path); err != nil {
+				log.Println("remove file error:", err)
+				reply = linebot.NewTextMessage("無法刪除檔案")
+				return
+			}
+			reply = linebot.NewTextMessage("模板刪除成功")
+		}
+
 	}
 	return
 }
