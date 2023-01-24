@@ -160,7 +160,6 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 				return
 			} else {
 				defer db.Close()
-				//create table if not exists template (userid varchar(64),original_name varchar(64),name varchar(64),updatetime timestamp)
 				insertStat := fmt.Sprintf("insert into template values ('%s','%s','%s',now())", userid, message.FileName, newname)
 				if _, err := db.Exec(insertStat); err != nil {
 					log.Println("save template log fail:", err)
@@ -269,6 +268,9 @@ func processMessage(userid, replytoken string, m linebot.Message) (reply linebot
 		case string(UserModeTemplate): // switch to Template mode
 			users[userid] = UserModeTemplate
 			reply = templateModeMessage(userid)
+			return
+		case "0": // switch to default mode
+			users[userid] = UserModeDefault
 			return
 		}
 	}
