@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"flag"
 	"fmt"
 	"io"
 	pb "linebot/service_client"
@@ -12,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,7 +50,14 @@ var (
 	pycmd   *exec.Cmd
 	sigchan chan bool
 	users   map[string]userMode
+	tmpSong map[string]songInfo
 )
+
+type songInfo struct {
+	id    int
+	name  string
+	lyric string
+}
 
 func getUserProfile(e *linebot.Event) (userid, displayname string) {
 	switch e.Source.Type {
@@ -216,13 +223,108 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 }
 
 func songModeMessage(userid string) (reply linebot.SendingMessage) {
-	reply = linebot.NewTextMessage("已切換至歌曲模式")
+	reply = linebot.NewTextMessage("已切換至歌曲模式，請輸入查詢或修改的歌名。")
 	return
 }
 
 func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
-	//lyric := searchLyric(message.Text)
-	//reply = linebot.NewTextMessage(lyric)
+	reply = songModeMessage(userid)
+	switch message := m.(type) {
+	case *linebot.TextMessage:
+		t := message.Text
+		r, _ := regexp.Compile("^(確認新增|確認修改|新增|修改)歌曲:(.+?)(,ID:(.+)){0,1}$")
+		match := r.FindStringSubmatch(t)
+		tmpSongInfo, ok := tmpSong[userid]
+		if len(match) == 0 && len(t) < 20 {
+			// search
+			if db, err := connect(); err != nil {
+				log.Println(err)
+			} else {
+				defer db.Close()
+				var id int
+				var displayname, lyric string
+				sqlstat := fmt.Sprintf("select id,displayname,content from lyrics where displayname = '%v'", t)
+				if err := db.QueryRow(sqlstat).Scan(&id, &displayname, &lyric); err != nil {
+					// not exist
+					reply = linebot.NewTemplateMessage(t,
+						linebot.NewButtonsTemplate("", t, "是否要新增歌詞",
+							linebot.NewMessageAction("新增", fmt.Sprintf("新增歌曲:%v", t))))
+				} else {
+					// exist
+					reply = linebot.NewTemplateMessage(displayname,
+						linebot.NewButtonsTemplate("", displayname, lyric[:20],
+							linebot.NewMessageAction("修改", fmt.Sprintf("修改歌曲:%v,ID:%v", displayname, id))))
+				}
+			}
+		} else if len(match) > 0 && (match[1] == "新增" || match[1] == "修改") {
+			name := match[2]
+			var tmp songInfo
+			tmp.name = name
+			if match[1] == "新增" {
+				tmp.id = -1
+			} else if match[1] == "修改" {
+				id, _ := strconv.Atoi(match[4])
+				tmp.id = id
+			}
+			tmpSong[userid] = tmp
+			reply = linebot.NewTextMessage(fmt.Sprintf("請輸入「%v」的歌詞", name))
+		} else if len(match) > 0 && (match[1] == "確認新增" || match[1] == "確認修改") && ok {
+			name := match[2]
+			if name != tmpSongInfo.name {
+				reply = linebot.NewTextMessage("操作錯誤")
+				return
+			}
+			if match[1] == "確認新增" {
+				if db, err := connect(); err != nil {
+					log.Println(err)
+				} else {
+					defer db.Close()
+					var maxid int
+					sqlstat := "select max(id) from lyrics"
+					if err := db.QueryRow(sqlstat).Scan(&maxid); err != nil {
+						log.Println(err)
+					}
+					sqlstat = fmt.Sprintf("insert into lyrics values (%v,'%v','%v','%v',now())", maxid+1, name, name, tmpSongInfo.lyric)
+					if _, err := db.Exec(sqlstat); err != nil {
+						log.Println(err)
+					}
+					reply = linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))
+					return
+				}
+			} else if match[1] == "確認修改" {
+				id, _ := strconv.Atoi(match[4])
+				if id != tmpSongInfo.id {
+					reply = linebot.NewTextMessage("操作錯誤")
+					return
+				}
+				if db, err := connect(); err != nil {
+					log.Println(err)
+				} else {
+					defer db.Close()
+					sqlstat := fmt.Sprintf("update lyrics set content = '%v',updatetime = now() where id = %v ", tmpSongInfo.lyric, tmpSongInfo.id)
+					if _, err := db.Exec(sqlstat); err != nil {
+						log.Println(err)
+					}
+					reply = linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))
+					return
+				}
+			}
+			delete(tmpSong, userid)
+		} else if ok {
+			tmpSongInfo.lyric = t
+			tmpSong[userid] = tmpSongInfo
+			if tmpSongInfo.id == -1 {
+				reply = linebot.NewTemplateMessage(tmpSongInfo.name,
+					linebot.NewButtonsTemplate("", tmpSongInfo.name, "是否確認新增",
+						linebot.NewMessageAction("確認", fmt.Sprintf("確認新增歌曲:%v", tmpSongInfo.name))))
+			} else {
+				reply = linebot.NewTemplateMessage(tmpSongInfo.name,
+					linebot.NewButtonsTemplate("", tmpSongInfo.name, "是否確認修改",
+						linebot.NewMessageAction("確認", fmt.Sprintf("確認修改歌曲:%v,ID:%v", tmpSongInfo.name, tmpSongInfo.id))))
+			}
+		}
+
+	}
 	return
 }
 
@@ -418,8 +520,6 @@ func initGrpc() (err error) {
 }
 
 func main() {
-	flag.Parse()
-
 	// read config file
 	var err error
 	c, err = readConfig()
@@ -434,6 +534,7 @@ func main() {
 
 	// init users mode map
 	users = make(map[string]userMode)
+	tmpSong = make(map[string]songInfo)
 
 	// grpc connection
 	err = initGrpc()
