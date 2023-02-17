@@ -6,6 +6,7 @@ import grpc
 import service_pb2
 import service_pb2_grpc
 import lyric
+import ppt
 
 
 
@@ -13,7 +14,9 @@ class service(service_pb2_grpc.MyServiceServicer):
     def SearchLyric(self, request, context):
         result = lyric.searchLyric(request.name)
         return service_pb2.songinfo(lyric=result)
-
+    def MakePpt(self, request, context):
+        filename = ppt.makeppt(request.songnames,request.lyrics)
+        return service_pb2.filename(filename=filename)
 
 def serve(port):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

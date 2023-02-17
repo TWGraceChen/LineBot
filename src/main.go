@@ -90,6 +90,23 @@ func searchLyric(songname string) (lyric string) {
 	return r.GetLyric()
 }
 
+func makeppt(songLyrics [][]string, template string) (outputfile string) {
+	c := pb.NewMyServiceClient(gc)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var names []string
+	var lyrics []string
+	for _, content := range songLyrics {
+		names = append(names, content[0])
+		lyrics = append(lyrics, content[1])
+	}
+	r, err := c.MakePpt(ctx, &pb.Pptcontent{Songnames: names, Lyrics: lyrics})
+	if err != nil {
+		log.Printf("make ppt error: %v", err)
+	}
+	return r.GetFilename()
+}
+
 func templateModeMessage(userid string) (reply []linebot.SendingMessage) {
 	reply = []linebot.SendingMessage{linebot.NewTextMessage("已切換至模板模式，上傳一個pptx檔案即可建立模板。")}
 	if db, err := connect(); err != nil {
@@ -335,6 +352,27 @@ func listModeMessage(userid string) (reply []linebot.SendingMessage) {
 	return
 }
 func listModeAction(userid string, m linebot.Message) (reply []linebot.SendingMessage) {
+	reply = songModeMessage(userid)
+	switch message := m.(type) {
+	case *linebot.TextMessage:
+		t := message.Text
+		songs := strings.Split(t, "\n")
+		db, err := connect()
+		defer db.Close()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		var songLyrics [][]string //[[name1 lyric1],[name2 lyric2]...]
+		for _, songname := range songs {
+			var displayname, lyric string
+			sqlstat := fmt.Sprintf("select displayname,content from lyrics where displayname = '%v'", songname)
+			db.QueryRow(sqlstat).Scan(&displayname, &lyric)
+			songLyrics = append(songLyrics, []string{displayname, lyric})
+		}
+		outputfile := makeppt(songLyrics, "")
+		log.Printf(outputfile)
+	}
 	return
 }
 

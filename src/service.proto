@@ -6,6 +6,7 @@ option go_package = "./linebot";
 
 service MyService {
   rpc SearchLyric (searchinfo) returns (songinfo){}
+  rpc MakePpt (pptcontent) returns (filename){}
 }
 
 
@@ -17,3 +18,13 @@ message songinfo {
   string lyric = 1;
 }
 
+
+message pptcontent{
+  repeated string songnames = 1;
+  repeated string lyrics = 2;
+}
+
+
+message filename {
+  string filename = 1;
+}

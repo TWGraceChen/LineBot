@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rservice.proto\"\x1a\n\nsearchinfo\x12\x0c\n\x04name\x18\x01 \x01(\t\"\x19\n\x08songinfo\x12\r\n\x05lyric\x18\x01 \x01(\t24\n\tMyService\x12\'\n\x0bSearchLyric\x12\x0b.searchinfo\x1a\t.songinfo\"\x00\x42\x0bZ\t./linebotb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rservice.proto\"\x1a\n\nsearchinfo\x12\x0c\n\x04name\x18\x01 \x01(\t\"\x19\n\x08songinfo\x12\r\n\x05lyric\x18\x01 \x01(\t\"/\n\npptcontent\x12\x11\n\tsongnames\x18\x01 \x03(\t\x12\x0e\n\x06lyrics\x18\x02 \x03(\t\"\x1c\n\x08\x66ilename\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t2Y\n\tMyService\x12\'\n\x0bSearchLyric\x12\x0b.searchinfo\x1a\t.songinfo\"\x00\x12#\n\x07MakePpt\x12\x0b.pptcontent\x1a\t.filename\"\x00\x42\x0bZ\t./linebotb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'service_pb2', globals())
@@ -25,6 +25,10 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _SEARCHINFO._serialized_end=43
   _SONGINFO._serialized_start=45
   _SONGINFO._serialized_end=70
-  _MYSERVICE._serialized_start=72
-  _MYSERVICE._serialized_end=124
+  _PPTCONTENT._serialized_start=72
+  _PPTCONTENT._serialized_end=119
+  _FILENAME._serialized_start=121
+  _FILENAME._serialized_end=149
+  _MYSERVICE._serialized_start=151
+  _MYSERVICE._serialized_end=240
 # @@protoc_insertion_point(module_scope)
