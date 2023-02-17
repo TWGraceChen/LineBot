@@ -90,8 +90,8 @@ func searchLyric(songname string) (lyric string) {
 	return r.GetLyric()
 }
 
-func templateModeMessage(userid string) (reply linebot.SendingMessage) {
-	reply = linebot.NewTextMessage("已切換至模板模式，上傳一個pptx檔案即可建立模板。")
+func templateModeMessage(userid string) (reply []linebot.SendingMessage) {
+	reply = []linebot.SendingMessage{linebot.NewTextMessage("已切換至模板模式，上傳一個pptx檔案即可建立模板。")}
 	if db, err := connect(); err != nil {
 		log.Println(err)
 	} else {
@@ -113,15 +113,15 @@ func templateModeMessage(userid string) (reply linebot.SendingMessage) {
 
 			}
 			if len(actions) > 0 {
-				reply = linebot.NewTemplateMessage("已切換至模板模式",
-					linebot.NewButtonsTemplate("", "模板模式", "上傳一個pptx檔案即可建立模板，以下是已經建立的模板，可以點選後選擇下載或刪除。", actions...))
+				reply = []linebot.SendingMessage{linebot.NewTemplateMessage("已切換至模板模式",
+					linebot.NewButtonsTemplate("", "模板模式", "上傳一個pptx檔案即可建立模板，以下是已經建立的模板，可以點選後選擇下載或刪除。", actions...))}
 			}
 		}
 	}
 	return
 }
 
-func templateModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+func templateModeAction(userid string, m linebot.Message) (reply []linebot.SendingMessage) {
 	reply = templateModeMessage(userid)
 	switch message := m.(type) {
 	case *linebot.FileMessage:
@@ -131,7 +131,7 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 		} else {
 			// check upload file is ppt file
 			if !strings.HasSuffix(message.FileName, ".pptx") {
-				reply = linebot.NewTextMessage("新增失敗，檔案非pptx檔。")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("新增失敗，檔案非pptx檔。")}
 				return
 			}
 
@@ -142,41 +142,42 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				if err := os.MkdirAll(path, 0755); err != nil {
 					log.Println("create dir err:", err)
-					reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+					reply = []linebot.SendingMessage{linebot.NewTextMessage("系統錯誤，上傳失敗")}
 					return
 				}
 			}
 			f, err := os.Create(name)
 			if err != nil {
 				log.Println("create file err:", err)
-				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("系統錯誤，上傳失敗")}
 				return
 			}
 			defer f.Close()
 			_, err = io.Copy(f, content.Content)
 			if err != nil {
 				log.Println("copy content to file err:", err)
-				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("系統錯誤，上傳失敗")}
 				return
 			}
 
 			// save record
 			if db, err := connect(); err != nil {
 				log.Println(err)
-				reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("系統錯誤，上傳失敗")}
 				return
 			} else {
 				defer db.Close()
 				insertStat := fmt.Sprintf("insert into template values ('%s','%s','%s',now())", userid, message.FileName, newname)
 				if _, err := db.Exec(insertStat); err != nil {
 					log.Println("save template log fail:", err)
-					reply = linebot.NewTextMessage("系統錯誤，上傳失敗")
+					reply = []linebot.SendingMessage{linebot.NewTextMessage("系統錯誤，上傳失敗")}
 					return
 				}
 			}
 
 		}
-		reply = linebot.NewTextMessage("模板已上傳，模板:" + message.FileName)
+		reply = []linebot.SendingMessage{linebot.NewTextMessage("模板已上傳，模板:" + message.FileName)}
+		reply = append(reply, templateModeMessage(userid)...)
 	case *linebot.TextMessage:
 		t := message.Text
 		r, _ := regexp.Compile("^(|下載|刪除)模板：(.*),建立於：(.*),系統檔案名稱：(.*)$")
@@ -190,12 +191,12 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 		updatetime := match[3]
 		name := match[4]
 		if action == "" { // provide delete and download option
-			reply = linebot.NewTemplateMessage("刪除/下載模板",
+			reply = []linebot.SendingMessage{linebot.NewTemplateMessage("刪除/下載模板",
 				linebot.NewConfirmTemplate(fmt.Sprintf("請選擇要刪除/下載模板：%v(建立於：%v)", original_name, updatetime),
 					linebot.NewMessageAction("刪除", fmt.Sprintf("刪除模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime, name)),
-					linebot.NewMessageAction("下載", fmt.Sprintf("下載模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime, name))))
+					linebot.NewMessageAction("下載", fmt.Sprintf("下載模板：%v,建立於：%v,系統檔案名稱：%v", original_name, updatetime, name))))}
 		} else if action == "下載" { // download template
-			reply = linebot.NewTextMessage("尚未開放下載功能")
+			reply = []linebot.SendingMessage{linebot.NewTextMessage("尚未開放下載功能")}
 		} else if action == "刪除" { // delete template
 			// delete data
 			if db, err := connect(); err != nil {
@@ -212,22 +213,22 @@ func templateModeAction(userid string, m linebot.Message) (reply linebot.Sending
 			path := fmt.Sprintf("%v/template/%v", c.servicePath, name)
 			if err := os.Remove(path); err != nil {
 				log.Println("remove file error:", err)
-				reply = linebot.NewTextMessage("無法刪除檔案")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("無法刪除檔案")}
 				return
 			}
-			reply = linebot.NewTextMessage("模板刪除成功")
+			reply = []linebot.SendingMessage{linebot.NewTextMessage("模板刪除成功")}
 		}
 
 	}
 	return
 }
 
-func songModeMessage(userid string) (reply linebot.SendingMessage) {
-	reply = linebot.NewTextMessage("已切換至歌曲模式，請輸入查詢或修改的歌名。")
+func songModeMessage(userid string) (reply []linebot.SendingMessage) {
+	reply = []linebot.SendingMessage{linebot.NewTextMessage("已切換至歌曲模式，請輸入查詢或修改的歌名。")}
 	return
 }
 
-func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+func songModeAction(userid string, m linebot.Message) (reply []linebot.SendingMessage) {
 	reply = songModeMessage(userid)
 	switch message := m.(type) {
 	case *linebot.TextMessage:
@@ -246,14 +247,15 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 				sqlstat := fmt.Sprintf("select id,displayname,content from lyrics where displayname = '%v'", t)
 				if err := db.QueryRow(sqlstat).Scan(&id, &displayname, &lyric); err != nil {
 					// not exist
-					reply = linebot.NewTemplateMessage(t,
+					reply = []linebot.SendingMessage{linebot.NewTemplateMessage(t,
 						linebot.NewButtonsTemplate("", t, "是否要新增歌詞",
-							linebot.NewMessageAction("新增", fmt.Sprintf("新增歌曲:%v", t))))
+							linebot.NewMessageAction("新增", fmt.Sprintf("新增歌曲:%v", t))))}
 				} else {
 					// exist
-					reply = linebot.NewTemplateMessage(displayname,
-						linebot.NewButtonsTemplate("", displayname, lyric[:20],
-							linebot.NewMessageAction("修改", fmt.Sprintf("修改歌曲:%v,ID:%v", displayname, id))))
+					reply = []linebot.SendingMessage{linebot.NewTextMessage(lyric)}
+					reply = append(reply, linebot.NewTemplateMessage(displayname,
+						linebot.NewButtonsTemplate("", displayname, "歌詞在上面",
+							linebot.NewMessageAction("修改", fmt.Sprintf("修改歌曲:%v,ID:%v", displayname, id)))))
 				}
 			}
 		} else if len(match) > 0 && (match[1] == "新增" || match[1] == "修改") {
@@ -267,11 +269,11 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 				tmp.id = id
 			}
 			tmpSong[userid] = tmp
-			reply = linebot.NewTextMessage(fmt.Sprintf("請輸入「%v」的歌詞", name))
+			reply = []linebot.SendingMessage{linebot.NewTextMessage(fmt.Sprintf("請輸入「%v」的歌詞", name))}
 		} else if len(match) > 0 && (match[1] == "確認新增" || match[1] == "確認修改") && ok {
 			name := match[2]
 			if name != tmpSongInfo.name {
-				reply = linebot.NewTextMessage("操作錯誤")
+				reply = []linebot.SendingMessage{linebot.NewTextMessage("操作錯誤")}
 				return
 			}
 			if match[1] == "確認新增" {
@@ -288,13 +290,13 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 					if _, err := db.Exec(sqlstat); err != nil {
 						log.Println(err)
 					}
-					reply = linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))
+					reply = []linebot.SendingMessage{linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))}
 					return
 				}
 			} else if match[1] == "確認修改" {
 				id, _ := strconv.Atoi(match[4])
 				if id != tmpSongInfo.id {
-					reply = linebot.NewTextMessage("操作錯誤")
+					reply = []linebot.SendingMessage{linebot.NewTextMessage("操作錯誤")}
 					return
 				}
 				if db, err := connect(); err != nil {
@@ -305,7 +307,7 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 					if _, err := db.Exec(sqlstat); err != nil {
 						log.Println(err)
 					}
-					reply = linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))
+					reply = []linebot.SendingMessage{linebot.NewTextMessage(fmt.Sprintf("「%v」新增成功", name))}
 					return
 				}
 			}
@@ -314,13 +316,13 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 			tmpSongInfo.lyric = t
 			tmpSong[userid] = tmpSongInfo
 			if tmpSongInfo.id == -1 {
-				reply = linebot.NewTemplateMessage(tmpSongInfo.name,
+				reply = []linebot.SendingMessage{linebot.NewTemplateMessage(tmpSongInfo.name,
 					linebot.NewButtonsTemplate("", tmpSongInfo.name, "是否確認新增",
-						linebot.NewMessageAction("確認", fmt.Sprintf("確認新增歌曲:%v", tmpSongInfo.name))))
+						linebot.NewMessageAction("確認", fmt.Sprintf("確認新增歌曲:%v", tmpSongInfo.name))))}
 			} else {
-				reply = linebot.NewTemplateMessage(tmpSongInfo.name,
+				reply = []linebot.SendingMessage{linebot.NewTemplateMessage(tmpSongInfo.name,
 					linebot.NewButtonsTemplate("", tmpSongInfo.name, "是否確認修改",
-						linebot.NewMessageAction("確認", fmt.Sprintf("確認修改歌曲:%v,ID:%v", tmpSongInfo.name, tmpSongInfo.id))))
+						linebot.NewMessageAction("確認", fmt.Sprintf("確認修改歌曲:%v,ID:%v", tmpSongInfo.name, tmpSongInfo.id))))}
 			}
 		}
 
@@ -328,15 +330,15 @@ func songModeAction(userid string, m linebot.Message) (reply linebot.SendingMess
 	return
 }
 
-func listModeMessage(userid string) (reply linebot.SendingMessage) {
-	reply = linebot.NewTextMessage("已切換至歌單模式，請用以下的格式輸入歌單：模板：<模板名稱>\n<詩歌1名稱>\n<詩歌2名稱>\n<詩歌3名稱>\n經文:<經文出處>")
+func listModeMessage(userid string) (reply []linebot.SendingMessage) {
+	reply = []linebot.SendingMessage{linebot.NewTextMessage("已切換至歌單模式，請用以下的格式輸入歌單：模板：<模板名稱>\n<詩歌1名稱>\n<詩歌2名稱>\n<詩歌3名稱>\n經文:<經文出處>")}
 	return
 }
-func listModeAction(userid string, m linebot.Message) (reply linebot.SendingMessage) {
+func listModeAction(userid string, m linebot.Message) (reply []linebot.SendingMessage) {
 	return
 }
 
-func processMessage(userid, replytoken string, m linebot.Message) (reply linebot.SendingMessage) {
+func processMessage(userid, replytoken string, m linebot.Message) (reply []linebot.SendingMessage) {
 	if db, err := connect(); err != nil {
 		log.Println(err)
 	} else {
@@ -348,7 +350,7 @@ func processMessage(userid, replytoken string, m linebot.Message) (reply linebot
 	}
 
 	// prepare default message
-	reply = linebot.NewImagemapMessage("https://github.com/TWGraceChen/LineBot/blob/main/src/img/modeimg.jpg?raw=true",
+	defaultReply := linebot.NewImagemapMessage("https://github.com/TWGraceChen/LineBot/blob/main/src/img/modeimg.jpg?raw=true",
 		"請輸入要切換的模式",
 		linebot.ImagemapBaseSize{Width: 1040, Height: 1040},
 		linebot.NewMessageImagemapAction("歌曲管理", string(UserModeSong), linebot.ImagemapArea{X: 0, Y: 0, Width: 1040, Height: 520}),
@@ -373,7 +375,6 @@ func processMessage(userid, replytoken string, m linebot.Message) (reply linebot
 			return
 		case "0": // switch to default mode
 			users[userid] = UserModeDefault
-			return
 		}
 	}
 
@@ -384,6 +385,8 @@ func processMessage(userid, replytoken string, m linebot.Message) (reply linebot
 		reply = listModeAction(userid, m)
 	case UserModeSong:
 		reply = songModeAction(userid, m)
+	default:
+		reply = append(reply, defaultReply)
 	}
 	return
 
@@ -412,7 +415,7 @@ func processEvent(events []*linebot.Event) {
 		switch event.Type {
 		case linebot.EventTypeMessage:
 			reply := processMessage(userid, event.ReplyToken, event.Message)
-			if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+			if _, err := bot.ReplyMessage(event.ReplyToken, reply...).Do(); err != nil {
 				log.Print(err)
 			}
 		default:
